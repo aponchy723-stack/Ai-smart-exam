@@ -49,15 +49,73 @@ async function manageQuestions(id){
   if(!e){links.push({question_id:q.id});linked.add(q.id)}
  }
  host.innerHTML=`<div class="panel"><h3>Question manager (${questions.length})</h3><label>Question text</label><textarea id="qt-${id}" placeholder="Write MCQ question"></textarea><div class="grid">${['A','B','C','D'].map(l=>`<div><label>Option ${l}</label><input id="op${l}-${id}" placeholder="Option ${l}"></div>`).join('')}</div><label>Correct answer</label><select id="ans-${id}"><option>A</option><option>B</option><option>C</option><option>D</option></select><label>Explanation (optional)</label><textarea id="exp-${id}"></textarea><button data-addq="${id}" class="green">Add question</button><p class="muted tiny" id="qmsg-${id}"></p><hr>${questions.map((q,i)=>`<p class="tiny"><b>${i+1}. ${esc(q.question_text)}</b> · Answer ${esc(q.correct_answer||'—')} <button class="red tiny" data-delq="${q.id}">Delete</button></p>`).join('')||'<p class="muted">No questions added yet.</p>'}</div>`;
- host.querySelector('[data-addq]').onclick=async()=>{
-  let text=$('#qt-'+id).value.trim(),opts=['A','B','C','D'].map(l=>$('#op'+l+'-'+id).value.trim()),answer=$('#ans-'+id).value,explanation=$('#exp-'+id).value.trim();
-  if(!text||opts.some(x=>!x)){msg('#qmsg-'+id,'Enter the question and all four options.');return}
-  const addBtn=host.querySelector('[data-addq]');addBtn.disabled=true;msg('#qmsg-'+id,'Saving question…');
-  let {data:q,error:e1}=await sb.from('questions').insert({exam_id:id,question_text:text,options:opts,correct_answer:answer,explanation}).select('id').single();
-  if(e1){addBtn.disabled=false;msg('#qmsg-'+id,'Question save failed: '+e1.message);return}
-  let {error:e2}=await sb.from('exam_questions').insert({exam_id:id,question_id:q.id,position:links.length,correct_answer:answer,explanation});
-  if(e2){await sb.from('questions').delete().eq('id',q.id);addBtn.disabled=false;msg('#qmsg-'+id,'Could not attach question to exam: '+e2.message);return}
+ 
+host.querySelector('[data-addq]').onclick=async()=>{
+  let text=$('#qt-'+id).value.trim();
+  let opts=['A','B','C','D'].map(l=>$('#op'+l+'-'+id).value.trim());
+  let answer=$('#ans-'+id).value;
+  let explanation=$('#exp-'+id).value.trim();
+
+  if(!text||opts.some(x=>!x)){
+    msg('#qmsg-'+id,'Enter the question and all four options.');
+    return;
+  }
+
+  const btn=host.querySelector('[data-addq]');
+  btn.disabled=true;
+
+  if(editingQuestionId){
+    msg('#qmsg-'+id,'Updating question...');
+
+    let {error:e1}=await sb.from('questions')
+      .update({question_text:text,options:opts,correct_answer:answer,explanation})
+      .eq('id',editingQuestionId).eq('exam_id',id);
+
+    if(e1){
+      btn.disabled=false;
+      msg('#qmsg-'+id,'Update failed: '+e1.message);
+      return;
+    }
+
+    let {error:e2}=await sb.from('exam_questions')
+      .update({correct_answer:answer,explanation})
+      .eq('exam_id',id).eq('question_id',editingQuestionId);
+
+    if(e2){
+      btn.disabled=false;
+      msg('#qmsg-'+id,'Question updated, but answer link update failed: '+e2.message);
+      return;
+    }
+
+    editingQuestionId=null;
+    await manageQuestions(id);
+    return;
+  }
+
+  msg('#qmsg-'+id,'Saving question...');
+  let {data:q,error:e1}=await sb.from('questions')
+    .insert({exam_id:id,question_text:text,options:opts,correct_answer:answer,explanation})
+    .select('id').single();
+
+  if(e1){
+    btn.disabled=false;
+    msg('#qmsg-'+id,'Question save failed: '+e1.message);
+    return;
+  }
+
+  let {error:e2}=await sb.from('exam_questions')
+    .insert({exam_id:id,question_id:q.id,position:links.length,correct_answer:answer,explanation});
+
+  if(e2){
+    await sb.from('questions').delete().eq('id',q.id);
+    btn.disabled=false;
+    msg('#qmsg-'+id,'Could not attach question: '+e2.message);
+    return;
+  }
+
   await manageQuestions(id);
+};
+
  };
  host.querySelectorAll('[data-delq]').forEach(b=>b.onclick=async()=>{if(confirm('Delete this question?')){let {error:e}=await sb.from('exam_questions').delete().eq('exam_id',id).eq('question_id',b.dataset.delq);if(e){alert(e.message);return}let {error:e2}=await sb.from('questions').delete().eq('id',b.dataset.delq);if(e2){alert('Link removed, but question record could not be deleted: '+e2.message);return}manageQuestions(id)}});
 }
