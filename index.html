@@ -7,7 +7,7 @@
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>AI Smart Exam</h1><p>Online examination platform · Admin & Student portals</p></div></div></header>
 <main>
-<div id="config" class="panel"><h2>Connect your examination database</h2><p class="muted">Enter your Supabase project URL and anon/public key. These values are designed to be public; never enter a service-role key here.</p><label>Supabase Project URL</label><input id="sbUrl" value="https://ifqbudfwgqjkakfwlpew.supabase.co" placeholder="https://your-project.supabase.co"><label>Supabase anon / publishable key</label><input id="sbKey" value="sb_publishable_08BfJHy85q5wf5GdhZm2mA_RwpeBqoz" placeholder="Supabase anon or publishable key"><div class="actions"><button id="connect">Connect</button></div><p id="configMsg" class="muted tiny">First run the included supabase_setup.sql in your Supabase SQL Editor.</p></div>
+<div id="config" class="panel"><h2>Connect your examination database</h2><p class="muted">Enter your Supabase project URL and anon/public key. These values are designed to be public; never enter a service-role key here.</p><label>Supabase Project URL</label><input id="sbUrl" placeholder="https://your-project.supabase.co"><label>Supabase anon / publishable key</label><input id="sbKey" placeholder="Supabase anon or publishable key"><div class="actions"><button id="connect">Connect</button></div><p id="configMsg" class="muted tiny">First run the included supabase_setup.sql in your Supabase SQL Editor.</p></div>
 <div id="app" class="hidden">
 <nav class="tabs"><button class="tab active" data-tab="home">Home</button><button class="tab" data-tab="admin">Admin dashboard</button><button class="tab" data-tab="student">Take exam</button></nav>
 <section id="home"><div class="panel"><h2>Welcome to AI Smart Exam</h2><p class="muted">Create secure exam links, invite students, and review centrally stored results.</p><div class="grid"><div class="card"><h3>Admin portal</h3><p class="muted">Sign in to create exams, add questions, publish unique links and monitor results.</p><button data-goto="admin">Open admin portal</button></div><div class="card"><h3>Student portal</h3><p class="muted">Enter an exam link, student name and ID to begin.</p><button class="secondary" data-goto="student">Open student portal</button></div></div></div></section>
@@ -29,6 +29,7 @@ function setTab(id){$$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.
 $$('.tab').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));$$('[data-goto]').forEach(b=>b.onclick=()=>setTab(b.dataset.goto));
 function slugify(s){return s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'').slice(0,35)+'-'+Math.random().toString(36).slice(2,7)}
 function msg(id,t){$(id).textContent=t}
+$('#sbUrl').value='https://ifqbudfwgqjkakfwlpew.supabase.co';$('#sbKey').value='sb_publishable_08BfJHy85q5wf5GdhZm2mA_RwpeBqoz';
 $('#connect').onclick=async()=>{try{const url=$('#sbUrl').value.trim(),key=$('#sbKey').value.trim();if(!url||!key)throw Error('Enter both project URL and anon key.');sb=window.supabase.createClient(url,key);const {data,error}=await sb.auth.getSession();if(error)throw error;$('#config').classList.add('hidden');$('#app').classList.remove('hidden');if(data.session){user=data.session.user;checkAdmin()}const p=new URLSearchParams(location.search);if(p.get('exam')){$('#examSlug').value=p.get('exam');setTab('student')}}catch(e){msg('#configMsg',e.message)}};
 $('#login').onclick=async()=>{msg('#loginMsg','Signing in…');let {data,error}=await sb.auth.signInWithPassword({email:$('#email').value,password:$('#password').value});if(error){msg('#loginMsg',error.message);return}user=data.user;checkAdmin()};
 async function checkAdmin(){let {data,error}=await sb.from('admins').select('user_id').eq('user_id',user.id).maybeSingle();if(error||!data){msg('#loginMsg','This account is not listed as an administrator. Add its auth user ID to public.admins using the SQL setup instructions.');return}$('#loginBox').querySelector('#logout').classList.remove('hidden');$('#adminArea').classList.remove('hidden');msg('#loginMsg','Signed in as administrator.');loadExams()}
@@ -48,74 +49,34 @@ async function manageQuestions(id){
   const {error:e}=await sb.from('exam_questions').insert({exam_id:id,question_id:q.id,position:(links||[]).length,correct_answer:q.correct_answer,explanation:q.explanation||''});
   if(!e){links.push({question_id:q.id});linked.add(q.id)}
  }
- host.innerHTML=`<div class="panel"><h3>Question manager (${questions.length})</h3><label>Question text</label><textarea id="qt-${id}" placeholder="Write MCQ question"></textarea><div class="grid">${['A','B','C','D'].map(l=>`<div><label>Option ${l}</label><input id="op${l}-${id}" placeholder="Option ${l}"></div>`).join('')}</div><label>Correct answer</label><select id="ans-${id}"><option>A</option><option>B</option><option>C</option><option>D</option></select><label>Explanation (optional)</label><textarea id="exp-${id}"></textarea><button data-addq="${id}" class="green">Add question</button><p class="muted tiny" id="qmsg-${id}"></p><hr>${questions.map((q,i)=>`<p class="tiny"><b>${i+1}. ${esc(q.question_text)}</b> · Answer ${esc(q.correct_answer||'—')} <button class="red tiny" data-delq="${q.id}">Delete</button></p>`).join('')||'<p class="muted">No questions added yet.</p>'}</div>`;
- 
-host.querySelector('[data-addq]').onclick=async()=>{
-  let text=$('#qt-'+id).value.trim();
-  let opts=['A','B','C','D'].map(l=>$('#op'+l+'-'+id).value.trim());
-  let answer=$('#ans-'+id).value;
-  let explanation=$('#exp-'+id).value.trim();
-
-  if(!text||opts.some(x=>!x)){
-    msg('#qmsg-'+id,'Enter the question and all four options.');
-    return;
+ host.innerHTML=`<div class="panel"><h3>Question manager (${questions.length})</h3><label>Question text</label><textarea id="qt-${id}" placeholder="Write MCQ question"></textarea><div class="grid">${['A','B','C','D'].map(l=>`<div><label>Option ${l}</label><input id="op${l}-${id}" placeholder="Option ${l}"></div>`).join('')}</div><label>Correct answer</label><select id="ans-${id}"><option>A</option><option>B</option><option>C</option><option>D</option></select><label>Explanation (optional)</label><textarea id="exp-${id}"></textarea><button data-addq="${id}" class="green">Add question</button><p class="muted tiny" id="qmsg-${id}"></p><hr>${questions.map((q,i)=>`<p class="tiny"><b>${i+1}. ${esc(q.question_text)}</b> · Answer ${esc(q.correct_answer||'—')} <button class="secondary tiny" data-editq="${q.id}">Edit</button> <button class="red tiny" data-delq="${q.id}">Delete</button></p>`).join('')||'<p class="muted">No questions added yet.</p>'}</div>`;
+ const addBtn=host.querySelector('[data-addq]');
+ host.querySelectorAll('[data-editq]').forEach(b=>b.onclick=()=>{
+  const q=questions.find(x=>x.id===b.dataset.editq);if(!q)return;
+  $('#qt-'+id).value=q.question_text||'';
+  const opts=Array.isArray(q.options)?q.options:Object.values(q.options||{});
+  ['A','B','C','D'].forEach((l,i)=>$('#op'+l+'-'+id).value=opts[i]||'');
+  $('#ans-'+id).value=q.correct_answer||'A';$('#exp-'+id).value=q.explanation||'';
+  addBtn.dataset.editing=q.id;addBtn.textContent='Update question';msg('#qmsg-'+id,'Editing selected question.');
+  $('#qt-'+id).scrollIntoView({behavior:'smooth',block:'center'});
+ });
+ addBtn.onclick=async()=>{
+  let text=$('#qt-'+id).value.trim(),opts=['A','B','C','D'].map(l=>$('#op'+l+'-'+id).value.trim()),answer=$('#ans-'+id).value,explanation=$('#exp-'+id).value.trim();
+  if(!text||opts.some(x=>!x)){msg('#qmsg-'+id,'Enter the question and all four options.');return}
+  addBtn.disabled=true;msg('#qmsg-'+id,addBtn.dataset.editing?'Updating question…':'Saving question…');
+  if(addBtn.dataset.editing){
+   const qid=addBtn.dataset.editing;
+   let {error:e1}=await sb.from('questions').update({question_text:text,options:opts,correct_answer:answer,explanation}).eq('id',qid).eq('exam_id',id);
+   if(e1){addBtn.disabled=false;msg('#qmsg-'+id,'Question update failed: '+e1.message);return}
+   let {error:e2}=await sb.from('exam_questions').update({correct_answer:answer,explanation}).eq('exam_id',id).eq('question_id',qid);
+   if(e2){addBtn.disabled=false;msg('#qmsg-'+id,'Question saved, but answer link update failed: '+e2.message);return}
+   await manageQuestions(id);return;
   }
-
-  const btn=host.querySelector('[data-addq]');
-  btn.disabled=true;
-
-  if(editingQuestionId){
-    msg('#qmsg-'+id,'Updating question...');
-
-    let {error:e1}=await sb.from('questions')
-      .update({question_text:text,options:opts,correct_answer:answer,explanation})
-      .eq('id',editingQuestionId).eq('exam_id',id);
-
-    if(e1){
-      btn.disabled=false;
-      msg('#qmsg-'+id,'Update failed: '+e1.message);
-      return;
-    }
-
-    let {error:e2}=await sb.from('exam_questions')
-      .update({correct_answer:answer,explanation})
-      .eq('exam_id',id).eq('question_id',editingQuestionId);
-
-    if(e2){
-      btn.disabled=false;
-      msg('#qmsg-'+id,'Question updated, but answer link update failed: '+e2.message);
-      return;
-    }
-
-    editingQuestionId=null;
-    await manageQuestions(id);
-    return;
-  }
-
-  msg('#qmsg-'+id,'Saving question...');
-  let {data:q,error:e1}=await sb.from('questions')
-    .insert({exam_id:id,question_text:text,options:opts,correct_answer:answer,explanation})
-    .select('id').single();
-
-  if(e1){
-    btn.disabled=false;
-    msg('#qmsg-'+id,'Question save failed: '+e1.message);
-    return;
-  }
-
-  let {error:e2}=await sb.from('exam_questions')
-    .insert({exam_id:id,question_id:q.id,position:links.length,correct_answer:answer,explanation});
-
-  if(e2){
-    await sb.from('questions').delete().eq('id',q.id);
-    btn.disabled=false;
-    msg('#qmsg-'+id,'Could not attach question: '+e2.message);
-    return;
-  }
-
+  let {data:q,error:e1}=await sb.from('questions').insert({exam_id:id,question_text:text,options:opts,correct_answer:answer,explanation}).select('id').single();
+  if(e1){addBtn.disabled=false;msg('#qmsg-'+id,'Question save failed: '+e1.message);return}
+  let {error:e2}=await sb.from('exam_questions').insert({exam_id:id,question_id:q.id,position:links.length,correct_answer:answer,explanation});
+  if(e2){await sb.from('questions').delete().eq('id',q.id);addBtn.disabled=false;msg('#qmsg-'+id,'Could not attach question to exam: '+e2.message);return}
   await manageQuestions(id);
-};
-
  };
  host.querySelectorAll('[data-delq]').forEach(b=>b.onclick=async()=>{if(confirm('Delete this question?')){let {error:e}=await sb.from('exam_questions').delete().eq('exam_id',id).eq('question_id',b.dataset.delq);if(e){alert(e.message);return}let {error:e2}=await sb.from('questions').delete().eq('id',b.dataset.delq);if(e2){alert('Link removed, but question record could not be deleted: '+e2.message);return}manageQuestions(id)}});
 }
@@ -123,21 +84,9 @@ async function togglePublish(id,status){let {data:q}=await sb.from('exam_questio
 async function loadResults(id){$('#resultsList').textContent='Loading results…';$('#resultsList').scrollIntoView({behavior:'smooth',block:'start'});let {data,error}=await sb.from('exam_attempts').select('student_name,student_id,started_at,submitted_at,correct_count,wrong_count,skipped_count,marks,max_marks,percentage,status').eq('exam_id',id).order('started_at',{ascending:false});if(error){$('#resultsList').textContent='Could not load results: '+error.message;return}$('#resultsList').innerHTML=data.length?`<div class="stats"><div class="stat"><strong>${data.length}</strong><span>Attempts</span></div><div class="stat"><strong>${data.filter(x=>x.status==='submitted').length}</strong><span>Submitted</span></div><div class="stat"><strong>${data.length?Math.round(data.reduce((s,x)=>s+(x.percentage||0),0)/data.length):0}%</strong><span>Average</span></div><div class="stat"><strong>${data.length?Math.max(...data.map(x=>x.percentage||0)):0}%</strong><span>Top score</span></div></div><div class="tablewrap"><table><thead><tr><th>Student</th><th>ID</th><th>Score</th><th>Status</th><th>Time</th></tr></thead><tbody>${data.map(x=>`<tr><td>${esc(x.student_name)}</td><td>${esc(x.student_id)}</td><td>${x.percentage??'—'}%</td><td>${esc(x.status)}</td><td>${x.submitted_at?new Date(x.submitted_at).toLocaleString():'—'}</td></tr>`).join('')}</tbody></table></div>`:'No student attempts yet.'}
 $('#beginExam').onclick=async()=>{let slug=$('#examSlug').value.trim();try{if(!$('#studentName').value.trim())throw Error('Enter your name.');if(!$('#studentId').value.trim())throw Error('Enter your student ID.');if(slug.includes('?exam='))slug=new URL(slug).searchParams.get('exam')||slug;let {data:meta,error:me}=await sb.rpc('public_exam',{p_slug:slug});if(me)throw me;if(!meta)throw Error('Exam not found or not published.');if(!Array.isArray(meta.questions)||meta.questions.length===0)throw Error('This exam has no questions attached yet. Please contact the admin.');let {data,error}=await sb.rpc('start_exam',{p_slug:slug,p_student_name:$('#studentName').value.trim(),p_student_id:$('#studentId').value.trim()});if(error)throw error;currentExam=data;answers={};remaining=data.duration_minutes*60;$('#studentEntry').classList.add('hidden');renderStudentExam()}catch(e){msg('#studentMsg',e.message)}};
 function renderStudentExam(){let e=currentExam;$('#studentExam').innerHTML=`<div class="panel"><div class="qhead"><h2>${esc(e.title)}</h2><span class="timer" id="stuTimer"></span></div><p class="muted">Your time starts now. Answers are submitted automatically when time expires.</p><div class="progress"><i id="stuProgress" style="width:0%"></i></div><div id="stuQs">${e.questions.map((q,i)=>`<div class="qrow"><span class="pill">Question ${i+1} / ${e.questions.length}</span><p>${esc(q.question)}</p>${q.options.map((o,j)=>`<label class="choice"><input type="radio" name="s${i}" value="${'ABCD'[j]}"><b>${'ABCD'[j]}.</b> ${esc(o)}</label>`).join('')}</div>`).join('')}</div><button id="stuSubmit" class="green" style="width:100%">Submit examination</button></div>`;
-
-$$('#stuQs input').forEach(inp=>inp.onchange=()=>{
-const group=$$('#stuQs input[name="'+inp.name+'"]');
-if(group.some(x=>x.disabled))return;
-answers[e.questions[+inp.name.slice(1)].id]=inp.value;
-group.forEach(x=>x.disabled=true);
-$('#stuProgress').style.width=(Object.keys(answers).length/e.questions.length*100)+'%'
-});
-left=remaining;if(timer)clearInterval(timer);tickStudent();timer=setInterval(()=>{left--;tickStudent();if(left<=0){clearInterval(timer);submitStudent(true)}},1000);$('#stuSubmit').onclick=()=>submitStudent(false)}
+$$('#stuQs input').forEach(inp=>inp.onchange=()=>{if(!inp.checked)return;answers[e.questions[+inp.name.slice(1)].id]=inp.value;$$('#stuQs input').filter(x=>x.name===inp.name).forEach(x=>x.disabled=true);$('#stuProgress').style.width=(Object.keys(answers).length/e.questions.length*100)+'%'});left=remaining;if(timer)clearInterval(timer);tickStudent();timer=setInterval(()=>{left--;tickStudent();if(left<=0){clearInterval(timer);submitStudent(true)}},1000);$('#stuSubmit').onclick=()=>submitStudent(false)}
 function tickStudent(){let t=$('#stuTimer');if(t)t.textContent=Math.floor(left/60)+':'+String(left%60).padStart(2,'0')}
 async function submitStudent(auto){if(!currentExam)return;clearInterval(timer);$('#stuSubmit').disabled=true;try{let {data,error}=await sb.rpc('submit_exam',{p_attempt_token:currentExam.attempt_token,p_answers:answers});if(error)throw error;$('#studentExam').innerHTML='';$('#studentResult').innerHTML=`<div class="panel"><h2>Examination submitted</h2><div class="stats"><div class="stat"><strong>${data.correct}</strong><span>Correct</span></div><div class="stat"><strong>${data.wrong}</strong><span>Wrong</span></div><div class="stat"><strong>${data.skipped}</strong><span>Skipped</span></div><div class="stat"><strong>${data.percentage}%</strong><span>Score</span></div></div><p><b>Marks:</b> ${data.marks} / ${data.max_marks}</p><p class="muted">${data.expired?'Time limit was reached.':'Your answers have been recorded.'}</p><button id="backStudent" class="secondary">Back to student portal</button></div>`;currentExam=null;$('#backStudent').onclick=()=>{clearInterval(timer);$('#studentResult').innerHTML='';$('#studentEntry').classList.remove('hidden');$('#studentExam').innerHTML='';setTab('student')}}catch(e){alert('Submission issue: '+e.message);let b=$('#stuSubmit');if(b)b.disabled=false}}
-
-// Existing project connection: public publishable key only.
-$('#sbUrl').value='https://ifqbudfwgqjkakfwlpew.supabase.co';
-$('#sbKey').value='sb_publishable_08BfJHy85q5wf5GdhZm2mA_RwpeBqoz';
-$('#connect').click();
-
+// Automatically connect using the configured Supabase project.
+try{$('#connect').click()}catch(e){msg('#configMsg',e.message)}
 </script></body></html>
